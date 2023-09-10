@@ -156,6 +156,29 @@ public class RadonTransformer extends Transformer<RadonConfig> {
                                 fakeFields.get(owner).add(field);
                                 flow.incrementAndGet();
                             }
+                        } else if (ain.getOpcode() == Opcodes.GETSTATIC
+                            && ain.getNext() != null && ain.getNext().getOpcode() == Opcodes.ICONST_1
+                            && ain.getNext().getNext() != null && ain.getNext().getNext().getOpcode() == Opcodes.IF_ICMPEQ
+                            && ain.getNext().getNext().getNext() != null && ain.getNext().getNext().getNext().getOpcode() == Opcodes.ACONST_NULL
+                            && ain.getNext().getNext().getNext().getNext() != null
+                            && ain.getNext().getNext().getNext().getNext().getOpcode() == Opcodes.ATHROW) {
+                            LabelNode jump = ((JumpInsnNode) ain.getNext().getNext()).label;
+                            ClassNode owner = classNodes().stream().filter(c -> c.name.equals(((FieldInsnNode) ain).owner)).findFirst().orElse(null);
+                            if (owner == null) {
+                                continue;
+                            }
+                            FieldNode field = owner.fields.stream().filter(f ->
+                                    f.name.equals(((FieldInsnNode) ain).name) && f.desc.equals(((FieldInsnNode) ain).desc)).findFirst().orElse(null);
+                            if (field != null && Modifier.isFinal(field.access)) {
+                                method.instructions.remove(ain.getNext().getNext().getNext().getNext());
+                                method.instructions.remove(ain.getNext().getNext().getNext());
+                                method.instructions.remove(ain.getNext().getNext());
+                                method.instructions.remove(ain.getNext());
+                                method.instructions.set(ain, new JumpInsnNode(Opcodes.GOTO, jump));
+                                fakeFields.putIfAbsent(owner, new HashSet<>());
+                                fakeFields.get(owner).add(field);
+                                flow.incrementAndGet();
+                            }
                         }
                     }
                 }
